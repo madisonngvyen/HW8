@@ -1,0 +1,94 @@
+`timescale 1ns / 1ps
+
+module CSR_File(
+    input  logic        clk,
+    input  logic        rst,
+    input  logic        csr_en,
+    input  logic [2:0]  csr_op,      
+    input  logic [11:0] csr_addr,
+    input  logic [31:0] csr_wdata,
+    output logic [31:0] csr_rdata,
+    input  logic        take_intr,
+    input  logic        mret_exec,
+    input  logic [31:0] pc_curr,     // current PC (save in MEPC)
+    output logic [31:0] csr_pc,      // PC from CSR (mtvec or mepc)
+    output logic        pc_from_csr, 
+    output logic        mie_en     
+);
+
+    // CSR registers
+    logic [31:0] mstatus;
+    logic [31:0] mtvec;
+    logic [31:0] mepc;
+
+    // decode addresses
+    localparam MSTATUS_ADDR = 12'h300;
+    localparam MTVEC_ADDR   = 12'h305;
+    localparam MEPC_ADDR    = 12'h341;
+
+    always_comb begin
+        case (csr_addr)
+            MSTATUS_ADDR: csr_rdata = mstatus;
+            MTVEC_ADDR  : csr_rdata = mtvec;
+            MEPC_ADDR   : csr_rdata = mepc;
+            default     : csr_rdata = 32'b0;
+        endcase
+    end
+
+    always_ff @(posedge clk) begin
+        if (rst) begin
+            mstatus     <= 32'b0;
+            mtvec       <= 32'h00000010; // default trap vector
+            mepc        <= 32'b0;
+            csr_pc      <= 32'b0;
+            pc_from_csr <= 1'b0;
+        end
+        else begin
+            // default no PC override
+            pc_from_csr <= 1'b0;
+
+            // CSR instructions
+            if (csr_en) begin
+                case (csr_op)
+                    3'b001: begin // CSRRW
+                        case (csr_addr)
+                            MSTATUS_ADDR: mstatus <= csr_wdata;
+                            MTVEC_ADDR  : mtvec   <= csr_wdata;
+                            MEPC_ADDR   : mepc    <= csr_wdata;
+                        endcase
+                    end
+                    3'b010: begin // CSRRS
+                        case (csr_addr)
+                            MSTATUS_ADDR: mstatus <= mstatus | csr_wdata;
+                            MTVEC_ADDR  : mtvec   <= mtvec   | csr_wdata;
+                            MEPC_ADDR   : mepc    <= mepc    | csr_wdata;
+                        endcase
+                    end
+                    3'b011: begin // CSRRC
+                        case (csr_addr)
+                            MSTATUS_ADDR: mstatus <= mstatus & ~csr_wdata;
+                            MTVEC_ADDR  : mtvec   <= mtvec   & ~csr_wdata;
+                            MEPC_ADDR   : mepc    <= mepc    & ~csr_wdata;
+                        endcase
+                    end
+                endcase
+            end
+
+            // Interrupt entry
+            if (take_intr) begin
+                mepc        <= pc_curr;   // save current PC
+                csr_pc      <= mtvec;     // jump 
+                pc_from_csr <= 1'b1;
+                mstatus[7]  <= mstatus[3];
+                mstatus[3]  <= 1'b0;
+            end
+            else if (mret_exec) begin
+                csr_pc      <= mepc;
+                pc_from_csr <= 1'b1;
+                mstatus[3]  <= mstatus[7];
+                mstatus[7]  <= 1'b1;
+            end
+        end
+    end
+    assign mie_en = mstatus[3];
+endmodule
