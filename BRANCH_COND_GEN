@@ -1,0 +1,31 @@
+`timescale 1ns / 1ps
+
+module BRANCH_COND_GEN(
+    input [31:0] rs1, //First Input
+    input  [31:0] rs2, //Second Input
+    output logic  br_eq, //Branch equal
+    output logic br_lt, //Branch Less Than
+    output logic br_ltu //Branch Less Than Unsigned Values
+    );
+    
+    always_comb
+    begin
+    if (rs1 == rs2) // checks if rs1 and rs2 are equal
+        br_eq = 1; //sets br_eq to 1 if rs1 and rs2 are equal
+    else
+        br_eq = 0; //sets br_eq to 0 if rs1 and rs2 are equal
+        
+    if ($signed(rs1) < $signed(rs2)) // rs1 & rs2 signed, checks if rs1 < rs2
+        br_lt = 1; // sets br_lt to 1 if rs1 is less than rs2
+    else
+        br_lt = 0; // sets br_lt to 0 if rs1 is less than rs2
+        
+    if (rs1 < rs2) // treats rs1 and rs2 as unsigned values, checks if rs1 < rs2
+        br_ltu = 1; // sets br_lt to 1 if rs1 is less than rs2
+    else
+        br_ltu = 0; // sets br_lt to 0 if rs1 is less than rs2
+    
+    end
+endmodule
+
+
