@@ -1,0 +1,110 @@
+`timescale 1ns / 1ps
+
+module CU_FSM(
+    input  logic      intr,
+    input  logic      clk,
+    input  logic      RST,
+    input  logic [6:0] opcode,     // ir[6:0]
+    input  logic      mret,        // from decoder
+
+    output logic PC_WE,
+    output logic RF_WE,
+    output logic memWE2,
+    output logic memRDEN1,
+    output logic memRDEN2,
+    output logic reset,
+
+    // new control signals for CSR/interrupts
+    output logic take_intr,
+    output logic mret_exec
+);
+    typedef enum {INIT, FETCH, EXEC, WB, INTERRUPT} STATES; 
+    STATES NS, PS;
+
+    always_ff @(posedge clk) begin
+        if (RST)
+            PS <= INIT;
+        else
+            PS <= NS;
+    end
+
+    // State Decoder 
+    always_comb begin
+        PC_WE     = 1'b0;
+        RF_WE     = 1'b0;
+        memWE2    = 1'b0;
+        memRDEN1  = 1'b0;
+        memRDEN2  = 1'b0;
+        reset     = 1'b0;
+        take_intr = 1'b0;
+        mret_exec = 1'b0;
+        NS        = INIT;
+
+        case (PS)
+            INIT: begin
+                NS    = FETCH;
+                reset = 1'b1;
+            end
+
+            FETCH: begin
+                NS       = EXEC;
+                memRDEN1 = 1'b1;
+            end
+
+            EXEC: begin
+                if (intr) begin
+                    NS = INTERRUPT;
+                end
+                // MRET instruction
+                else if (mret) begin
+                    mret_exec = 1'b1;
+                    PC_WE     = 1'b1;
+                    NS        = FETCH;
+                end
+                // Load → WB
+                else if (opcode == 7'b0000011) begin
+                    NS       = WB;
+                    memRDEN2 = 1'b1;
+                end
+                else begin
+                    NS = FETCH;
+                    case (opcode)
+                        7'b0110111, // LUI
+                        7'b0010111, // AUIPC
+                        7'b1101111, // JAL
+                        7'b1100111, // JALR
+                        7'b0010011, // I-type
+                        7'b0110011: begin // R-type
+                            PC_WE = 1'b1;
+                            RF_WE = 1'b1;
+                        end
+
+                        7'b1100011: begin 
+                            PC_WE = 1'b1;
+                        end
+
+                        7'b0100011: begin 
+                            PC_WE  = 1'b1;
+                            memWE2 = 1'b1;
+                        end
+                        default: ; 
+                    endcase
+                end
+            end
+
+            WB: begin
+                PC_WE = 1'b1;
+                RF_WE = 1'b1;
+                NS    = FETCH;
+            end  
+
+            INTERRUPT: begin
+                take_intr = 1'b1;
+                PC_WE     = 1'b1;   // load MTVEC
+                NS        = FETCH;
+            end
+
+            default: NS = INIT;
+        endcase
+    end
+endmodule
