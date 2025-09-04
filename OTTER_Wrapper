@@ -1,0 +1,105 @@
+`timescale 1ns/1ps
+
+module OTTER_Wrapper(
+  input         CLK,          // 100 MHz
+  input         BTNL,         // left button
+  input         BTNC,         // center button (reset)
+  input  [15:0] SWITCHES,
+  output [15:0] LEDS,
+  output [7:0]  CATHODES,
+  output [3:0]  ANODES
+);
+
+  localparam SWITCHES_AD = 32'h1100_0000;
+  localparam LEDS_AD     = 32'h1100_0020;
+  localparam SSEG_AD     = 32'h1100_0040;
+
+  // -----------------------------
+  // Clocks / reset
+  // -----------------------------
+  wire s_reset = BTNC;
+
+  // 100 MHz -> 50 MHz for MCU & debouncer
+  reg sclk_q = 1'b0;
+  always @(posedge CLK) sclk_q <= ~sclk_q;
+  wire sclk = sclk_q;
+
+  // -----------------------------
+  // Debounced one-shot (BTNL)
+  // -----------------------------
+  wire btn_int;
+  debounce_one_shot DB (
+    .CLK    (sclk),
+    .BTN    (BTNL),
+    .DB_BTN (btn_int)
+  );
+
+  // Rising-edge detector
+  reg  btn_int_q = 1'b0;
+  always @(posedge sclk) btn_int_q <= btn_int;
+  wire btn_rise = btn_int & ~btn_int_q;
+
+  // -----------------------------
+  // MCU wiring
+  // -----------------------------
+  wire [31:0] IOBUS_out, IOBUS_in, IOBUS_addr;
+  wire        IOBUS_wr;
+  wire        s_interrupt = btn_int & SWITCHES[0]; // gate IRQ by SW0
+
+  OtterMCU MCU (
+    .RST       (s_reset),
+    .intr      (s_interrupt),
+    .clk       (sclk),
+    .iobus_out (IOBUS_out),
+    .iobus_in  (IOBUS_in),
+    .iobus_addr(IOBUS_addr),
+    .iobus_wr  (IOBUS_wr)
+  );
+
+  // -----------------------------
+  // Seven-seg: DECIMAL 0..49, wraps 49->00
+  // -----------------------------
+  reg  [6:0] count_0_to_49 = 7'd0;
+  reg [15:0] r_SSEG        = 16'd0;
+
+  always @(posedge sclk) begin
+    if (s_reset) begin
+      count_0_to_49 <= 7'd0;
+    end else if (SWITCHES[0] && btn_rise) begin
+      if (count_0_to_49 >= 7'd49)
+        count_0_to_49 <= 7'd0;
+      else
+        count_0_to_49 <= count_0_to_49 + 7'd1;
+    end
+  end
+
+  always @(posedge sclk) begin
+    r_SSEG <= {9'd0, count_0_to_49};
+  end
+
+  SevSegDisp SSG_DISP (
+    .CLK      (CLK),
+    .MODE     (1'b1),   // decimal
+    .DATA_IN  (r_SSEG),
+    .CATHODES (CATHODES),
+    .ANODES   (ANODES)
+  );
+
+  // -----------------------------
+  // MCU → LEDs (still allow firmware to drive them)
+  // -----------------------------
+  reg [15:0] leds_mmio = 16'h0000;
+  always @(posedge sclk) begin
+    if (s_reset) begin
+      leds_mmio <= 16'h0000;
+    end else if (IOBUS_wr && IOBUS_addr == LEDS_AD) begin
+      leds_mmio <= IOBUS_out[15:0];
+    end
+  end
+
+  assign LEDS = leds_mmio;
+
+  // Board → MCU reads
+  assign IOBUS_in = (IOBUS_addr == SWITCHES_AD) ? {16'b0, SWITCHES} : 32'b0;
+
+endmodule
