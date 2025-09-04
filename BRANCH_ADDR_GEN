@@ -1,0 +1,20 @@
+`timescale 1ns / 1ps
+
+module BRANCH_ADDR_GEN(
+    input [31:0] J_type,
+    input [31:0] pc,
+    input [31:0] B_type,
+    input [31:0] rs,
+    input [31:0] I_type,
+    output [31:0] jalr,
+    output [31:0] jal,
+    output [31:0] branch
+    );
+    
+    // Assigning the branch address by adding the Program Counter and the Branch offset
+    assign branch = pc + B_type;
+    // Assigning the jump and link address by adding the Program Counter and the Jump offset
+    assign jal = pc + J_type;
+    // Assigning the jump and link register address by adding the Source Register and the Immediate value    
+    assign jalr = rs + I_type;
+endmodule
