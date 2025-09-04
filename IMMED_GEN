@@ -1,0 +1,20 @@
+`timescale 1ns / 1ps
+
+module IMMED_GEN(
+    input [31:0] ir,
+    output  [31:0] U_type,
+    output  [31:0] I_type,
+    output  [31:0] S_type,
+    output  [31:0] J_type,
+    output  [31:0] B_type
+);
+
+   assign U_type = {ir[31:12], {12'h0000}}; // Generating U-type immediate by shifting and zero-padding
+   assign I_type = {{21{ir[31]}}, ir[30:20]}; // Generating I-type immediate by sign-extending and selecting appropriate bits
+   assign  S_type = {{21{ir[31]}}, ir[30:25], ir[11:7]}; // Generating S-type immediate by sign-extending and selecting appropriate bits
+   assign B_type = {{20{ir[31]}}, {{ir[7]}}, ir[30:25], ir[11:8], {1'b0}}; // Generating B-type immediate by sign-extending and selecting appropriate bits
+   assign J_type = {{12{ir[31]}}, ir[19:12], {{ir[20]}}, ir[30:21], {1'b0}}; // Generating J-type immediate by sign-extending and selecting appropriate bits
+
+
+endmodule
+
