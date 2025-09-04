@@ -1,0 +1,163 @@
+`timescale 1ns / 1ps
+
+module CU_DCDR(
+   input  logic       br_eq, 
+   input  logic       br_lt, 
+   input  logic       br_ltu,
+   input  logic [6:0] opcode,   // ir[6:0]
+   input  logic       func7,    // ir[30]
+   input  logic [2:0] func3,    // ir[14:12] 
+
+   output logic [3:0] ALU_FUN,
+   output logic [1:0] PC_SEL,
+   output logic       srcA_SEL,
+   output logic [1:0] srcB_SEL, 
+   output logic [1:0] RF_SEL,
+
+   // new outputs for HW8
+   output logic       csr_en,
+   output logic [2:0] csr_op,
+   output logic       mret
+);
+
+    // Default assignments
+    always_comb begin
+        ALU_FUN   = 4'b0000;
+        srcA_SEL  = 1'b0;
+        srcB_SEL  = 2'b00;
+        PC_SEL    = 2'b00;
+        RF_SEL    = 2'b00;
+        csr_en    = 1'b0;
+        csr_op    = 3'b000;
+        mret      = 1'b0;
+        
+        // Opcode decoder
+        case (opcode)
+            // R Type
+            7'b0110011: begin 
+                ALU_FUN  = {func7, func3};
+                srcA_SEL = 1'b0;
+                srcB_SEL = 2'b00;
+                PC_SEL   = 2'b00;
+                RF_SEL   = 2'b11;
+            end
+            
+            // I Type
+            7'b0010011: begin
+                case (func3)
+                    3'b101: begin
+                        ALU_FUN  = {func7, func3};
+                        srcA_SEL = 1'b0;
+                        srcB_SEL = 2'b01;
+                        PC_SEL   = 2'b00;
+                        RF_SEL   = 2'b11;
+                    end
+                    default: begin
+                        ALU_FUN  = {1'b0, func3};
+                        srcA_SEL = 1'b0;
+                        srcB_SEL = 2'b01;
+                        PC_SEL   = 2'b00;
+                        RF_SEL   = 2'b11;
+                    end
+                endcase
+            end
+            
+            // jalr
+            7'b1100111: begin
+                ALU_FUN  = 4'b0000;
+                srcA_SEL = 1'b0;
+                srcB_SEL = 2'b00;
+                PC_SEL   = 2'b01;
+                RF_SEL   = 2'b00;
+            end
+            
+            // Load instructions
+            7'b0000011: begin
+                ALU_FUN  = 4'b0000;
+                srcA_SEL = 1'b0;
+                srcB_SEL = 2'b01;
+                PC_SEL   = 2'b00;
+                RF_SEL   = 2'b10;
+            end    
+            
+            // S Type
+            7'b0100011: begin
+                ALU_FUN  = 4'b0000;
+                srcA_SEL = 1'b0;
+                srcB_SEL = 2'b10;
+                PC_SEL   = 2'b00;
+                RF_SEL   = 2'b00;
+            end 
+            
+            // B Type
+            7'b1100011: begin
+                ALU_FUN  = 4'b0000;
+                srcA_SEL = 1'b0;
+                srcB_SEL = 2'b00;
+                RF_SEL   = 2'b00;
+                case(func3)
+                    3'b000: PC_SEL = 2 * br_eq;     // beq
+                    3'b101: PC_SEL = 2 * (~br_lt);  // bge
+                    3'b111: PC_SEL = 2 * (~br_ltu); // bgeu
+                    3'b100: PC_SEL = 2 * br_lt;     // blt
+                    3'b110: PC_SEL = 2 * br_ltu;    // bltu
+                    3'b001: PC_SEL = 2 * (~br_eq);  // bne
+                    default: begin end
+                endcase
+            end
+            
+            // lui
+            7'b0110111: begin
+                srcA_SEL = 1'b1;
+                srcB_SEL = 2'b00;
+                PC_SEL   = 2'b00;
+                RF_SEL   = 2'b11;
+                ALU_FUN  = 4'b1001;
+            end
+            
+            // auipc
+            7'b0010111: begin
+                srcA_SEL = 1'b1;
+                srcB_SEL = 2'b11;
+                PC_SEL   = 2'b00;
+                RF_SEL   = 2'b11;
+                ALU_FUN  = 4'b0000;
+            end
+            
+            // jal
+            7'b1101111: begin
+                srcA_SEL = 1'b0;
+                srcB_SEL = 2'b00;
+                PC_SEL   = 2'b11;
+                RF_SEL   = 2'b00;
+                ALU_FUN  = 4'b0000;
+            end
+
+            // SYSTEM (CSR + MRET)
+            7'b1110011: begin
+                case (func3)
+                    3'b001: begin // CSRRW
+                        csr_en = 1'b1;
+                        csr_op = 3'b001;
+                        RF_SEL = 2'b01; // CSR data back to RF
+                    end
+                    3'b010: begin // CSRRS
+                        csr_en = 1'b1;
+                        csr_op = 3'b010;
+                        RF_SEL = 2'b01;
+                    end
+                    3'b011: begin // CSRRC
+                        csr_en = 1'b1;
+                        csr_op = 3'b011;
+                        RF_SEL = 2'b01;
+                    end
+                    3'b000: begin // SYSTEM special
+                        mret   = 1'b1;
+                        csr_en = 1'b0;
+                        RF_SEL = 2'b00;
+                    end
+                endcase
+            end
+        endcase
+    end
+endmodule
