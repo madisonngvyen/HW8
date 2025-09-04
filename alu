@@ -1,0 +1,26 @@
+`timescale 1ns / 1ps
+
+module alu(
+    input [31:0] srcA,
+    input [31:0] srcB,
+    input [3:0] alu_fun,
+    output reg [31:0] result
+    );
+always @(*) begin
+    case (alu_fun)
+        4'b0000: result = srcA + srcB; // Addition
+        4'b1000: result = srcA - srcB; // Subtraction
+        4'b0110: result = srcA | srcB; // Bitwise OR
+        4'b0111: result = srcA & srcB; // Bitwise AND
+        4'b0100: result = srcA ^ srcB; // Bitwise XOR
+        4'b1001: result = srcA; // Load Upper Immediate (LUI)
+        4'b0101: result = srcA >> srcB[4:0]; // Logical Shift Right (SRL)
+        4'b0001: result = srcA << srcB[4:0]; // Logical Shift Left (SLL)
+        4'b1101: result = $signed(srcA) >>> srcB[4:0]; // Arithmetic Shift Right (SRA)
+        4'b0010: result = ($signed(srcA) < $signed(srcB)) ? 32'd1: 32'd0; // Set Less Than (SLT) error here
+        4'b0011: result = (srcA < srcB) ? 32'd1: 32'd0; // Set Less Than Unsigned (SLTU)
+        default:result = 32'hdeadbeef;
+    endcase
+end
+endmodule
+
