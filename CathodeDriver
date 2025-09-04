@@ -1,0 +1,90 @@
+`timescale 1ns / 1ps
+
+module CathodeDriver(
+input CLK,
+    input [15:0] HEX,
+    output logic [7:0] CATHODES,
+    output logic [3:0] ANODES
+    );
+    
+  logic s_clk_500 = 1'b0;             // 500Hz refresh clock
+    logic [1:0] r_disp_digit = 2'b00;   // current digit being displayed
+    logic [19:0] clk_div_counter = 20'h00000;
+
+    // Clock Divider to create 500 Hz refresh from 100 MHz clock
+    always_ff @(posedge CLK) begin
+        clk_div_counter = clk_div_counter + 1;
+        
+        if (clk_div_counter == 20'h186A0) begin
+            clk_div_counter = 20'h00000;
+            s_clk_500 = ~s_clk_500;   // toggle every 1 ms creates 500 Hz clock
+        end
+    end
+    
+    // Refresh Seven Segment Display every 240 Hz
+    always_ff @(posedge s_clk_500) begin
+        case (r_disp_digit)
+            2'b00: begin
+                ANODES = 4'b1110; // Activate the rightmost digit
+                case (HEX[3:0])
+                    4'b0000: CATHODES = 8'b11000000; // 0 flipped
+                    4'b0001: CATHODES = 8'b11111001; // 1 flipped
+                    4'b0010: CATHODES = 8'b10100100; // 2 flipped
+                    4'b0011: CATHODES = 8'b10110000; // 3 flipped
+                    4'b0100: CATHODES = 8'b10011001; // 4 flipped
+                    4'b0101: CATHODES = 8'b10010010; // 5 flipped
+                    4'b0110: CATHODES = 8'b10000010; // 6 flipped
+                    4'b0111: CATHODES = 8'b11111000; // 7 flipped
+                    4'b1000: CATHODES = 8'b10000000; // 8 flipped
+                    4'b1001: CATHODES = 8'b10010000; // 9 flipped
+                    4'b1010: CATHODES = 8'b10001000; // a flipped
+                    4'b1011: CATHODES = 8'b10000011; // b flipped
+                    4'b1100: CATHODES = 8'b11000110; // c flipped
+                    4'b1101: CATHODES = 8'b10100001; // d flipped
+                    4'b1110: CATHODES = 8'b10000110; // e flipped
+                    4'b1111: CATHODES = 8'b10001110; // f flipped
+                    default: CATHODES = 8'b11111111; // failsafe turn off
+                endcase
+            end
+            2'b01: begin
+                ANODES = 4'b1101; // Activate the second digit from the right
+                case (HEX[7:4])
+                    4'b0000: CATHODES = 8'b11000000; // 0 flipped
+                    4'b0001: CATHODES = 8'b11111001; // 1 flipped
+                    4'b0010: CATHODES = 8'b10100100; // 2 flipped
+                    4'b0011: CATHODES = 8'b10110000; // 3 flipped
+                    4'b0100: CATHODES = 8'b10011001; // 4 flipped
+                    4'b0101: CATHODES = 8'b10010010; // 5 flipped
+                    4'b0110: CATHODES = 8'b10000010; // 6 flipped
+                    4'b0111: CATHODES = 8'b11111000; // 7 flipped
+                    4'b1000: CATHODES = 8'b10000000; // 8 flipped
+                    4'b1001: CATHODES = 8'b10010000; // 9 flipped
+                    4'b1010: CATHODES = 8'b10001000; // a flipped
+                    4'b1011: CATHODES = 8'b10000011; // b flipped
+                    4'b1100: CATHODES = 8'b11000110; // c flipped
+                    4'b1101: CATHODES = 8'b10100001; // d flipped
+                    4'b1110: CATHODES = 8'b10000110; // e flipped
+                    4'b1111: CATHODES = 8'b10001110; // f flipped
+                    default: CATHODES = 8'b11111111; // failsafe turn off
+                endcase
+            end
+            2'b10: begin
+                ANODES = 4'b1111; // Turn off third digit (second from left)
+                CATHODES = 8'b11111111; // All segments off
+            end
+            2'b11: begin
+                ANODES = 4'b1111; // Turn off leftmost digit
+                CATHODES = 8'b11111111; // All segments off
+            end
+            default: begin
+                ANODES = 4'hF;
+                CATHODES = 8'hFF;
+                r_disp_digit = 2'b00;
+            end
+        endcase
+        
+        r_disp_digit = r_disp_digit + 1;
+    end
+
+endmodule
+
